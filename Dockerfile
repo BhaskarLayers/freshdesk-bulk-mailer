@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # This puts main.py at /app/main.py
 COPY backend/ .
 
-# Run FastAPI with Uvicorn
-# We use the shell form (no brackets) to ensure $PORT variable expansion works.
-# Cloud Run injects the PORT environment variable (default 8080).
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Expose the port (informative only)
+EXPOSE 8080
+
+# Run FastAPI with Uvicorn using explicit shell execution
+# This ensures variable expansion happens correctly
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
