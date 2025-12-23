@@ -1,6 +1,9 @@
 # Use Python image
 FROM python:3.11-slim
 
+# Allow statements and log messages to immediately appear in the Knative logs
+ENV PYTHONUNBUFFERED True
+
 # Set working directory to /app
 WORKDIR /app
 
@@ -11,12 +14,10 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code directly into /app
+# This puts main.py at /app/main.py
 COPY backend/ .
 
-# Explicitly expose port 8080
-ENV PORT=8080
-EXPOSE 8080
-
 # Run FastAPI with Uvicorn
-# We use host 0.0.0.0 to ensure it listens on all interfaces (required for Docker/Cloud Run)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# We use the shell form (no brackets) to ensure $PORT variable expansion works.
+# Cloud Run injects the PORT environment variable (default 8080).
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
