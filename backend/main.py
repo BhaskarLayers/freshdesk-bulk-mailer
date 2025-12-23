@@ -31,30 +31,6 @@ def mask(text: Optional[str]) -> str:
         return f"{text[0]}***{text[-1]}"
     return f"{text[:3]}***{text[-3:]} (len={len(text)})"
 
-
-def validate_env() -> None:
-    domain = os.getenv("FRESHDESK_DOMAIN")
-    api_key = os.getenv("FRESHDESK_API_KEY")
-
-    if not domain or not api_key:
-        raise RuntimeError(
-            "FRESHDESK_DOMAIN and FRESHDESK_API_KEY must be set."
-        )
-
-    api_key_len = len(api_key.strip())
-    if api_key_len < 15:
-        raise RuntimeError(
-            f"Invalid Freshdesk API key length ({api_key_len})."
-        )
-
-    logger.info(
-        "Freshdesk env loaded: domain=%s, api_key_length=%d, api_key_preview=%s",
-        domain,
-        api_key_len,
-        mask(api_key),
-    )
-
-
 # ---------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------
@@ -74,12 +50,20 @@ app.add_middleware(
 # ---------------------------------------------------
 
 def build_base_url(domain: str) -> str:
+    if not domain:
+        return "http://localhost"
     if domain.startswith("https://"):
         return f"{domain.rstrip('/')}/api/v2"
     if ".freshdesk.com" in domain:
         return f"https://{domain.rstrip('/')}/api/v2"
     return f"https://{domain}.freshdesk.com/api/v2"
 
+# Global vars (Safe Initialization)
+FRESHDESK_DOMAIN = os.getenv("FRESHDESK_DOMAIN", "")
+FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY", "")
+BASE_URL = build_base_url(FRESHDESK_DOMAIN)
+AUTH = (FRESHDESK_API_KEY, "X")
+HEADERS = {"Content-Type": "application/json"}
 
 def freshdesk_get(endpoint: str) -> requests.Response:
     url = f"{BASE_URL}/{endpoint}"
@@ -88,7 +72,6 @@ def freshdesk_get(endpoint: str) -> requests.Response:
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return resp
-
 
 def send_ticket(
     email: str,
@@ -121,116 +104,110 @@ def send_ticket(
 
     return resp.json()
 
-
 # ---------------------------------------------------
-# Startup event (CRITICAL FIX)
+# Routes
 # ---------------------------------------------------
 
-@app.on_event("startup")
-async def startup_checks():
-    """
-    Cloud Run–safe startup.
-    Never crash the app here.
-    """
-    global FRESHDESK_DOMAIN, FRESHDESK_API_KEY, BASE_URL, AUTH, HEADERS
-
-    try:
-        validate_env()
-    except Exception as exc:
-        logger.error("❌ Environment validation failed: %s", exc)
-        return
-
-    FRESHDESK_DOMAIN = os.getenv("FRESHDESK_DOMAIN")
-    FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY")
-
-    BASE_URL = build_base_url(FRESHDESK_DOMAIN)
-    AUTH = (FRESHDESK_API_KEY, "X")
-    HEADERS = {"Content-Type": "application/json"}
-
-    logger.info("✅ Startup completed. Base URL: %s", BASE_URL)
-
-
-# ---------------------------------------------------
-# API endpoints
-# ---------------------------------------------------
+@app.get("/")
+def root():
+    """Health check for Cloud Run."""
+    return {"status": "ok", "service": "freshdesk-mailer"}
 
 @app.get("/health")
-async def health() -> Dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/ticket-fields")
-def get_ticket_fields():
-    resp = freshdesk_get("ticket_fields")
-    if not resp.ok:
-        raise HTTPException(resp.status_code, resp.text)
-    return resp.json()
-
+def health_check():
+    return {"status": "ok", "env_domain": mask(FRESHDESK_DOMAIN)}
 
 @app.post("/send-bulk")
-async def send_bulk(
+async def send_bulk_email(
     file: UploadFile = File(...),
     subject_template: str = Form(...),
     body_template: str = Form(...),
-    disposition: str = Form(...),
-    custom_fields_json: Optional[str] = Form(None),
     email_column: str = Form("email"),
 ):
-    content = await file.read()
+    if not FRESHDESK_API_KEY or len(FRESHDESK_API_KEY) < 10:
+        raise HTTPException(status_code=500, detail="Server misconfiguration: Invalid API Key")
+
+    logger.info(
+        "Received file=%s, subject_tmpl=%s, body_tmpl_len=%d, email_col=%s",
+        file.filename,
+        subject_template,
+        len(body_template),
+        email_column,
+    )
+
+    contents = await file.read()
     filename = file.filename or ""
 
     try:
-        if filename.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(BytesIO(content))
-        elif filename.endswith(".csv"):
-            df = pd.read_csv(StringIO(content.decode("utf-8")))
+        if filename.endswith(".csv"):
+            df = pd.read_csv(BytesIO(contents))
         else:
-            raise HTTPException(400, "Unsupported file type")
-    except Exception as exc:
-        raise HTTPException(400, f"File parse error: {exc}")
+            df = pd.read_excel(BytesIO(contents))
+    except Exception as e:
+        logger.error("Error parsing file: %s", e)
+        raise HTTPException(status_code=400, detail=f"Invalid file format: {e}")
+
+    df.columns = [c.strip() for c in df.columns]
 
     if email_column not in df.columns:
         raise HTTPException(
-            400,
-            {
-                "message": f"Email column '{email_column}' not found",
-                "columns": list(df.columns),
-            },
+            status_code=400,
+            detail=f"Column '{email_column}' not found. Available: {list(df.columns)}",
         )
 
-    extra_fields = {}
-    if custom_fields_json:
-        try:
-            extra_fields = json.loads(custom_fields_json)
-        except json.JSONDecodeError:
-            pass
-
-    final_custom_fields = {
-        "cf_choose_your_inquiry": disposition,
-        **extra_fields,
-    }
-
-    results: List[Dict[str, Any]] = []
-
+    results = []
+    
+    # Identify custom fields (columns that are NOT email)
+    # We ignore specific system fields if needed
+    ignored_fields = {"company", "company_id", email_column}
+    
     for idx, row in df.iterrows():
-        row_dict = {
-            k: "" if pd.isna(v) else str(v)
-            for k, v in row.to_dict().items()
-        }
+        recipient_email = str(row[email_column]).strip()
+        
+        # Build custom_fields dict for this row
+        # Only include columns that actually exist in the row
+        row_custom_fields = {}
+        for col in df.columns:
+            if col not in ignored_fields:
+                val = row[col]
+                if pd.notna(val) and str(val).strip() != "":
+                     # Freshdesk expects specific formats, but we send as string/number
+                     # Ensure we don't send nulls
+                     row_custom_fields[col] = val
 
-        email = row_dict.get(email_column, "").strip()
-        if not email:
-            results.append({"row": int(idx), "status": "skipped"})
-            continue
+        # Simple template substitution
+        # This replaces {name} with row['name'], etc.
+        # We use a safe substitution that doesn't crash on missing keys
+        row_dict = row.to_dict()
+        # Convert all to string for safe formatting
+        safe_row = {k: str(v) for k, v in row_dict.items()}
+        
+        try:
+            final_subject = subject_template.format(**safe_row)
+            final_body = body_template.format(**safe_row)
+        except KeyError as e:
+            # If template has {missing_col}, it might fail
+            # We'll just leave it or fail? Let's fail safe
+            final_subject = subject_template
+            final_body = body_template
+            logger.warning(f"Template key error: {e}")
 
         try:
-            subject = subject_template.format(**row_dict)
-            body = body_template.format(**row_dict)
-            ticket = send_ticket(email, subject, body, final_custom_fields)
-            results.append({"row": int(idx), "status": "sent", "ticket_id": ticket.get("id")})
-        except Exception as exc:
-            results.append({"row": int(idx), "status": "error", "error": str(exc)})
+            # -------------------------------------------------
+            # SEND TO FRESHDESK
+            # -------------------------------------------------
+            send_ticket(
+                email=recipient_email,
+                subject=final_subject,
+                body=final_body,
+                custom_fields=row_custom_fields
+            )
+            results.append({"email": recipient_email, "status": "sent"})
+        except Exception as e:
+            logger.error("Failed for %s: %s", recipient_email, e)
+            results.append({"email": recipient_email, "status": "error", "error": str(e)})
 
+        # Rate limit (avoid 429)
         time.sleep(0.5)
 
-    return {"total": len(df), "results": results}
+    return {"processed": len(results), "details": results}
