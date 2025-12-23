@@ -352,26 +352,4 @@ def freshdesk_test():
     """
     return test_portal_auth()
 
-# --- Static File Serving for Production (Docker/GCP) ---
-# Ensure this comes AFTER all API routes
 
-# 1. Mount the 'static' directory (which will contain assets like JS/CSS)
-# In Docker, we will copy frontend/dist/assets to backend/static/assets
-static_dir = Path(__file__).resolve().parent / "static"
-if static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
-
-# 2. Catch-all route to serve index.html for any non-API path (React SPA support)
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    # If API path is missed, return 404 (don't serve index.html for /api/...)
-    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
-        raise HTTPException(status_code=404, detail="Not Found")
-    
-    # Check if index.html exists (production mode)
-    index_file = static_dir / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    
-    # Fallback for local development if static files aren't built
-    return {"message": "Backend running. Frontend static files not found (run 'npm run build' and copy to backend/static for production)."}

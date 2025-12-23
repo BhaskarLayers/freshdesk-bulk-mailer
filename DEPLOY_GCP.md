@@ -1,80 +1,37 @@
 # Deploying to Google Cloud Platform (Cloud Run)
 
-This guide assumes you have the Google Cloud SDK (`gcloud`) installed and a GCP project set up.
+You have two easy ways to deploy. Since you asked for **Cloud Shell**, here are the commands.
 
-## Prerequisites
+## Option 1: Using Google Cloud Shell (Recommended for you)
 
-1.  **Google Cloud Project**: Create one at [console.cloud.google.com](https://console.cloud.google.com).
-2.  **Billing Enabled**: Cloud Run requires billing (though it has a generous free tier).
-3.  **APIs Enabled**: Enable "Cloud Run API" and "Artifact Registry API".
-
-## Steps to Deploy
-
-### 1. Login to Google Cloud
-Open your terminal and run:
-```bash
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-```
-
-### 2. Configure Docker Auth (Optional but recommended)
-```bash
-gcloud auth configure-docker
-```
-
-### 3. Build and Deploy (One-Command Method)
-You can use `gcloud run deploy` to build and deploy from source automatically.
-
-Run this command from the root `BulkEmailSender` directory:
+1.  Open [Google Cloud Shell](https://shell.cloud.google.com).
+2.  Run these commands one by one:
 
 ```bash
-gcloud run deploy bulk-freshdesk-mailer \
+# 1. Clone your repository
+git clone https://github.com/BhaskarLayers/freshdesk-bulk-mailer.git
+cd freshdesk-bulk-mailer
+
+# 2. Deploy to Cloud Run
+# Replace 'YOUR_API_KEY' and 'YOUR_DOMAIN' with your actual values!
+gcloud run deploy freshdesk-mailer \
   --source . \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars FRESHDESK_DOMAIN="your-domain",FRESHDESK_API_KEY="your-api-key"
+  --set-env-vars FRESHDESK_API_KEY="YOUR_API_KEY",FRESHDESK_DOMAIN="YOUR_DOMAIN"
 ```
 
-**Replace:**
-*   `your-domain`: Your Freshdesk domain (e.g., `layersshop-help.freshdesk.com`).
-*   `your-api-key`: Your actual Freshdesk API key.
-
-### 4. Access Your App
-Once deployment finishes, `gcloud` will output a Service URL (e.g., `https://bulk-freshdesk-mailer-xyz-uc.a.run.app`).
-Click that link to see your live application!
+3.  When asked to enable APIs (Artifact Registry, Cloud Run), type `y` and press Enter.
+4.  Wait for the deployment to finish. It will give you a URL (e.g., `https://freshdesk-mailer-xyz.a.run.app`).
 
 ---
 
-## Alternative: Build Docker Image Locally & Push
+## Option 2: Using the Google Cloud Console Website (No Coding)
 
-If you prefer to build the image locally first:
-
-1.  **Build:**
-    ```bash
-    docker build -t gcr.io/YOUR_PROJECT_ID/bulk-mailer .
-    ```
-
-2.  **Push:**
-    ```bash
-    docker push gcr.io/YOUR_PROJECT_ID/bulk-mailer
-    ```
-
-3.  **Deploy:**
-    ```bash
-    gcloud run deploy bulk-mailer \
-      --image gcr.io/YOUR_PROJECT_ID/bulk-mailer \
-      --platform managed \
-      --region us-central1 \
-      --allow-unauthenticated \
-      --set-env-vars FRESHDESK_DOMAIN="...",FRESHDESK_API_KEY="..."
-    ```
-
-## GitHub Integration (CI/CD)
-
-1.  Push this code to a GitHub repository.
-2.  Go to the [Cloud Run Console](https://console.cloud.google.com/run).
-3.  Click "Create Service".
-4.  Select "Continuously deploy new revisions from a source repository".
-5.  Connect your GitHub repo and select the branch.
-6.  Cloud Build will automatically deploy your app whenever you push changes!
+1.  Go to [console.cloud.google.com/run](https://console.cloud.google.com/run).
+2.  Click **Create Service**.
+3.  Select **"Continuously deploy from a repository"**.
+4.  Connect your GitHub repo (`BhaskarLayers/freshdesk-bulk-mailer`).
+5.  Under **Variables & Secrets**, add your `FRESHDESK_API_KEY` and `FRESHDESK_DOMAIN`.
+6.  Click **Create**.
