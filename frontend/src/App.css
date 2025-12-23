@@ -1,0 +1,219 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.app-background {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #0066ff 0%, #0052cc 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.app-background::before {
+    content: '';
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    top: -250px;
+    right: -250px;
+    animation: float 20s infinite ease-in-out;
+}
+
+.app-background::after {
+    content: '';
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    bottom: -200px;
+    left: -200px;
+    animation: float 15s infinite ease-in-out reverse;
+}
+
+@keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(30px, 30px) scale(1.1); }
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 40px 50px;
+    max-width: 600px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 1;
+    animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.header {
+    text-align: left;
+    margin-bottom: 30px;
+}
+
+h1 {
+    color: #1a1a1a;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+label {
+    display: block;
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+input[type="text"],
+textarea,
+select {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+    background: #fafafa;
+    font-family: inherit;
+}
+
+input[type="text"]:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: #0066ff;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+    line-height: 1.6;
+}
+
+.file-upload {
+    position: relative;
+    border: 2px dashed #0066ff;
+    border-radius: 12px;
+    padding: 30px 20px;
+    text-align: center;
+    background: linear-gradient(135deg, rgba(0, 102, 255, 0.05) 0%, rgba(255, 215, 0, 0.05) 100%);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.file-upload:hover {
+    background: linear-gradient(135deg, rgba(0, 102, 255, 0.1) 0%, rgba(255, 215, 0, 0.1) 100%);
+    border-color: #FFD700;
+}
+
+.file-upload input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+    color: #0066ff;
+}
+
+.upload-text {
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.upload-subtext {
+    color: #999;
+    font-size: 13px;
+}
+
+.button {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFC000 100%);
+    color: #0066ff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 16px rgba(255, 215, 0, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(255, 215, 0, 0.4);
+}
+
+.button:active {
+    transform: translateY(0);
+}
+
+.info-badge {
+    display: inline-block;
+    background: rgba(255, 215, 0, 0.15);
+    color: #0066ff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 40px 30px;
+    }
+
+    h1 {
+        font-size: 26px;
+    }
+}
