@@ -1,4 +1,4 @@
-# Use Python image (since your backend is Python, not Node)
+# Use Python image (Correct language for your backend)
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -16,5 +16,5 @@ COPY backend/ .
 ENV PORT=8080
 EXPOSE 8080
 
-# Run FastAPI with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run FastAPI with Uvicorn, using the PORT environment variable
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"
