@@ -152,10 +152,30 @@ const BulkMailer = () => {
 
     setSending(true);
     try {
-      const res = await axios.post<ApiResponse>(API_BASE, formData, {
+      const res = await axios.post<any>(API_BASE, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setResponse(res.data);
+      const data = res.data as any;
+      const results: ResultRow[] = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data?.details)
+          ? data.details.map((r: any, idx: number) => ({
+              row: idx + 1,
+              status: r?.status ?? "error",
+              ticket_id: r?.ticket_id,
+              reason: r?.reason,
+              error: r?.error,
+            }))
+          : [];
+
+      const total =
+        typeof data?.total === "number"
+          ? data.total
+          : typeof data?.processed === "number"
+            ? data.processed
+            : results.length;
+
+      setResponse({ total, results });
     } catch (err: any) {
       const message =
         err.response?.data?.detail ||
