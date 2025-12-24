@@ -186,12 +186,10 @@ async def send_bulk_email(
         # Only include columns that actually exist in the row
         row_custom_fields = {}
         for col in df.columns:
-            if col not in ignored_fields:
+            if col.startswith("cf_") and col not in ignored_fields:
                 val = row[col]
                 if pd.notna(val) and str(val).strip() != "":
-                     # Freshdesk expects specific formats, but we send as string/number
-                     # Ensure we don't send nulls
-                     row_custom_fields[col] = val
+                    row_custom_fields[col] = val
         # Merge dynamic custom fields from form
         extra_fields: Dict[str, Any] = {}
         if custom_fields_json:
@@ -204,6 +202,7 @@ async def send_bulk_email(
         # Attach disposition if provided
         if disposition:
             extra_fields["cf_choose_your_inquiry"] = disposition
+        extra_fields = {k: v for k, v in extra_fields.items() if isinstance(k, str) and k.startswith("cf_")}
         # Merge with precedence to extra_fields
         row_custom_fields = {**row_custom_fields, **extra_fields}
 
