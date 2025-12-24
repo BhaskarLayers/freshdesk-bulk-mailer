@@ -117,12 +117,30 @@ def root():
 def health_check():
     return {"status": "ok", "env_domain": mask(FRESHDESK_DOMAIN)}
 
+@app.get("/ticket-fields")
+def ticket_fields():
+    resp = freshdesk_get("ticket_fields")
+    if not resp.ok:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    data = resp.json()
+    simplified = []
+    for f in data:
+        simplified.append({
+            "name": f.get("name"),
+            "label": f.get("label"),
+            "choices": f.get("choices"),
+            "required_for_agents": f.get("required_for_agents"),
+            "type": f.get("type"),
+        })
+    return simplified
 @app.post("/send-bulk")
 async def send_bulk_email(
     file: UploadFile = File(...),
     subject_template: str = Form(...),
     body_template: str = Form(...),
     email_column: str = Form("email"),
+    disposition: str = Form(""),
+    custom_fields_json: str = Form(""),
 ):
     if not FRESHDESK_API_KEY or len(FRESHDESK_API_KEY) < 10:
         raise HTTPException(status_code=500, detail="Server misconfiguration: Invalid API Key")
@@ -174,6 +192,20 @@ async def send_bulk_email(
                      # Freshdesk expects specific formats, but we send as string/number
                      # Ensure we don't send nulls
                      row_custom_fields[col] = val
+        # Merge dynamic custom fields from form
+        extra_fields: Dict[str, Any] = {}
+        if custom_fields_json:
+            try:
+                parsed = json.loads(custom_fields_json)
+                if isinstance(parsed, dict):
+                    extra_fields = parsed
+            except Exception as e:
+                logger.warning(f"Invalid custom_fields_json: {e}")
+        # Attach disposition if provided
+        if disposition:
+            extra_fields["cf_choose_your_inquiry"] = disposition
+        # Merge with precedence to extra_fields
+        row_custom_fields = {**row_custom_fields, **extra_fields}
 
         # Simple template substitution
         # This replaces {name} with row['name'], etc.
