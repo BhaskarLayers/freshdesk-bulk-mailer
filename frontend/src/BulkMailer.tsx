@@ -127,7 +127,7 @@ const BulkMailer = () => {
       return;
     }
 
-    if (!selectedDisposition) {
+    if (dispositions.length > 0 && !selectedDisposition) {
       setError("Please select a disposition.");
       return;
     }
@@ -228,20 +228,22 @@ const BulkMailer = () => {
 
         <div className="form-group">
           <label>Ticket Disposition</label>
-          <select
-            value={selectedDisposition}
-            onChange={(e) => setSelectedDisposition(e.target.value)}
-          >
-            {dispositions.length === 0 ? (
-              <option disabled>Loading...</option>
-            ) : (
-              dispositions.map((d) => (
+          {dispositions.length === 0 ? (
+            <select disabled>
+              <option>Not required</option>
+            </select>
+          ) : (
+            <select
+              value={selectedDisposition}
+              onChange={(e) => setSelectedDisposition(e.target.value)}
+            >
+              {dispositions.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
-              ))
-            )}
-          </select>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Dynamic Mandatory Fields */}
