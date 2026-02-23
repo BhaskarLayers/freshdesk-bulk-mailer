@@ -30,9 +30,12 @@ jobs:
       - name: Deploy to Cloud Run
         working-directory: ./backend
         run: |
+          # Extract the service account email from the authenticated gcloud session
+          SA_EMAIL=$(gcloud config get-value account)
           gcloud run deploy ${{ env.SERVICE }} \
             --source . \
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --allow-unauthenticated \
+            --service-account=${SA_EMAIL} \
             --set-env-vars FRESHDESK_API_KEY=${{ secrets.FRESHDESK_API_KEY }},FRESHDESK_DOMAIN=${{ secrets.FRESHDESK_DOMAIN }}
