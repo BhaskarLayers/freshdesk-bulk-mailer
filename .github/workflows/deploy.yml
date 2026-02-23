@@ -32,11 +32,10 @@ jobs:
           gcloud builds submit --tag gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }} ./backend
 
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE }}
-          region: ${{ env.REGION }}
-          image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}
-          env_vars: |
-            FRESHDESK_API_KEY=${{ secrets.FRESHDESK_API_KEY }}
-            FRESHDESK_DOMAIN=${{ secrets.FRESHDESK_DOMAIN }}
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --allow-unauthenticated \
+            --set-env-vars FRESHDESK_API_KEY=${{ secrets.FRESHDESK_API_KEY }},FRESHDESK_DOMAIN=${{ secrets.FRESHDESK_DOMAIN }}
