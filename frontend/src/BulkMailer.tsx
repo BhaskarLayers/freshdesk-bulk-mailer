@@ -5,6 +5,7 @@ type ResultRow = {
   row: number;
   status: "sent" | "skipped" | "error";
   ticket_id?: number;
+  ticket_status?: number | string | null;
   reason?: string;
   error?: string | Record<string, unknown>;
 };
@@ -19,6 +20,7 @@ type TicketField = {
   label: string;
   choices?: string[] | Record<string, unknown>;
   required_for_agents?: boolean;
+  required_for_requester?: boolean;
   type?: string;
 };
 
@@ -36,11 +38,11 @@ const BulkMailer = () => {
   const [emailColumn, setEmailColumn] = useState("email");
   const [subjectTemplate, setSubjectTemplate] = useState(exampleSubject);
   const [bodyTemplate, setBodyTemplate] = useState(exampleBody);
-  
+
   // Specific hardcoded disposition field
   const [dispositions, setDispositions] = useState<string[]>([]);
   const [selectedDisposition, setSelectedDisposition] = useState("");
-  
+
   // Dynamic mandatory fields
   const [dynamicFields, setDynamicFields] = useState<TicketField[]>([]);
   const [dynamicValues, setDynamicValues] = useState<Record<string, string>>({});
@@ -48,6 +50,17 @@ const BulkMailer = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<ApiResponse | null>(null);
+
+  const formatTicketStatus = (value: ResultRow["ticket_status"]) => {
+    if (value === null || value === undefined || value === "") return "-";
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(n)) return String(value);
+    if (n === 2) return "Open";
+    if (n === 3) return "Pending";
+    if (n === 4) return "Resolved";
+    if (n === 5) return "Closed";
+    return String(value);
+  };
 
   useEffect(() => {
     const fetchFields = async () => {
@@ -73,35 +86,35 @@ const BulkMailer = () => {
         // 2. Handle other mandatory fields
         // Exclude standard fields that we handle separately or have defaults
         const ignoredFields = [
-          'subject', 
-          'description', 
-          'email', 
-          'requester', 
-          'status', 
-          'priority', 
-          'source', 
-          'group_id', 
-          'agent_id', 
-          'type', 
+          'subject',
+          'description',
+          'email',
+          'requester',
+          'status',
+          'priority',
+          'source',
+          'group_id',
+          'agent_id',
+          'type',
           'company',
           'company_id',
           'cf_choose_your_inquiry' // Already handled
         ];
 
-        const required = allFields.filter(f => 
-          f.required_for_agents && 
+        const required = allFields.filter(f =>
+          (f.required_for_agents || f.required_for_requester) &&
           !ignoredFields.includes(f.name)
         );
-        
+
         setDynamicFields(required);
 
         // Initialize values for new dynamic fields
         const initialValues: Record<string, string> = {};
         required.forEach(f => {
-             // If it has choices, maybe pick the first one? Or let user choose.
-             // We'll leave it empty to force selection/input unless we want defaults.
+          // If it has choices, maybe pick the first one? Or let user choose.
+          // We'll leave it empty to force selection/input unless we want defaults.
         });
-        setDynamicValues(prev => ({...initialValues, ...prev}));
+        setDynamicValues(prev => ({ ...initialValues, ...prev }));
 
       } catch (err) {
         console.error("Failed to fetch ticket fields", err);
@@ -146,7 +159,7 @@ const BulkMailer = () => {
     formData.append("body_template", bodyTemplate);
     formData.append("email_column", emailColumn);
     formData.append("disposition", selectedDisposition);
-    
+
     // Add dynamic fields as JSON
     formData.append("custom_fields_json", JSON.stringify(dynamicValues));
 
@@ -160,12 +173,13 @@ const BulkMailer = () => {
         ? data.results
         : Array.isArray(data?.details)
           ? data.details.map((r: any, idx: number) => ({
-              row: idx + 1,
-              status: r?.status ?? "error",
-              ticket_id: r?.ticket_id,
-              reason: r?.reason,
-              error: r?.error,
-            }))
+            row: idx + 1,
+            status: r?.status ?? "error",
+            ticket_id: r?.ticket_id,
+            ticket_status: r?.ticket_status,
+            reason: r?.reason,
+            error: r?.error,
+          }))
           : [];
 
       const total =
@@ -270,18 +284,18 @@ const BulkMailer = () => {
         {dynamicFields.map((field) => (
           <div key={field.name} className="form-group">
             <label>
-              {field.label} {field.required_for_agents && <span style={{color: 'red'}}>*</span>}
+              {field.label} {field.required_for_agents && <span style={{ color: 'red' }}>*</span>}
             </label>
             {field.choices ? (
               <select
                 value={dynamicValues[field.name] || ""}
                 onChange={(e) => handleDynamicChange(field.name, e.target.value)}
               >
-                 <option value="" disabled>Select {field.label}</option>
-                 {Array.isArray(field.choices) 
-                   ? field.choices.map((c: string) => <option key={c} value={c}>{c}</option>)
-                   : Object.keys(field.choices).map((c) => <option key={c} value={c}>{c}</option>)
-                 }
+                <option value="" disabled>Select {field.label}</option>
+                {Array.isArray(field.choices)
+                  ? field.choices.map((c: string) => <option key={c} value={c}>{c}</option>)
+                  : Object.keys(field.choices).map((c) => <option key={c} value={c}>{c}</option>)
+                }
               </select>
             ) : (
               <input
@@ -317,6 +331,7 @@ const BulkMailer = () => {
                   <th style={{ padding: '12px', textAlign: 'left', color: '#495057' }}>Row</th>
                   <th style={{ padding: '12px', textAlign: 'left', color: '#495057' }}>Status</th>
                   <th style={{ padding: '12px', textAlign: 'left', color: '#495057' }}>Ticket ID</th>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#495057' }}>Ticket Status</th>
                   <th style={{ padding: '12px', textAlign: 'left', color: '#495057' }}>Details</th>
                 </tr>
               </thead>
@@ -330,6 +345,7 @@ const BulkMailer = () => {
                       </span>
                     </td>
                     <td style={{ padding: '12px', color: '#212529' }}>{r.ticket_id ?? "-"}</td>
+                    <td style={{ padding: '12px', color: '#212529' }}>{formatTicketStatus(r.ticket_status)}</td>
                     <td style={{ padding: '12px', color: '#666' }}>
                       {typeof r.error === "object"
                         ? JSON.stringify(r.error)

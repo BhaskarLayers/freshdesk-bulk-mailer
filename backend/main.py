@@ -73,6 +73,19 @@ def freshdesk_get(endpoint: str) -> requests.Response:
         raise HTTPException(status_code=502, detail=str(exc))
     return resp
 
+def coerce_field_value(v: Any) -> Any:
+    """Cast string numbers to int for Freshdesk custom_number fields."""
+    if isinstance(v, str) and v.strip():
+        try:
+            f = float(v)
+            return int(f) if f == int(f) else f
+        except ValueError:
+            return v
+    if isinstance(v, float) and v == int(v):
+        return int(v)
+    return v
+
+
 def send_ticket(
     email: str,
     subject: str,
@@ -130,6 +143,7 @@ def ticket_fields():
             "label": f.get("label"),
             "choices": f.get("choices"),
             "required_for_agents": f.get("required_for_agents"),
+            "required_for_requester": f.get("required_for_requester"),
             "type": f.get("type"),
         })
     return simplified
@@ -179,7 +193,7 @@ async def send_bulk_email(
     # We ignore specific system fields if needed
     ignored_fields = {"company", "company_id", email_column}
     
-    for idx, row in df.iterrows():
+    for row_number, (_, row) in enumerate(df.iterrows(), start=1):
         recipient_email = str(row[email_column]).strip()
         
         # Build custom_fields dict for this row
@@ -189,7 +203,7 @@ async def send_bulk_email(
             if col.startswith("cf_") and col not in ignored_fields:
                 val = row[col]
                 if pd.notna(val) and str(val).strip() != "":
-                    row_custom_fields[col] = val
+                    row_custom_fields[col] = coerce_field_value(val)
         # Merge dynamic custom fields from form
         extra_fields: Dict[str, Any] = {}
         if custom_fields_json:
@@ -202,7 +216,7 @@ async def send_bulk_email(
         # Attach disposition if provided
         if disposition:
             extra_fields["cf_choose_your_inquiry"] = disposition
-        extra_fields = {k: v for k, v in extra_fields.items() if isinstance(k, str) and k.startswith("cf_")}
+        extra_fields = {k: coerce_field_value(v) for k, v in extra_fields.items() if isinstance(k, str) and k.startswith("cf_")}
         # Merge with precedence to extra_fields
         row_custom_fields = {**row_custom_fields, **extra_fields}
 
@@ -227,18 +241,36 @@ async def send_bulk_email(
             # -------------------------------------------------
             # SEND TO FRESHDESK
             # -------------------------------------------------
-            send_ticket(
+            ticket = send_ticket(
                 email=recipient_email,
                 subject=final_subject,
                 body=final_body,
                 custom_fields=row_custom_fields
             )
-            results.append({"email": recipient_email, "status": "sent"})
+            results.append(
+                {
+                    "row": row_number,
+                    "email": recipient_email,
+                    "status": "sent",
+                    "ticket_id": ticket.get("id"),
+                    "ticket_status": ticket.get("status"),
+                }
+            )
         except Exception as e:
             logger.error("Failed for %s: %s", recipient_email, e)
-            results.append({"email": recipient_email, "status": "error", "error": str(e)})
+            results.append(
+                {
+                    "row": row_number,
+                    "email": recipient_email,
+                    "status": "error",
+                    "ticket_id": None,
+                    "ticket_status": None,
+                    "error": str(e),
+                }
+            )
 
         # Rate limit (avoid 429)
         time.sleep(0.5)
 
-    return {"processed": len(results), "details": results}
+    total = len(results)
+    return {"total": total, "processed": total, "results": results, "details": results}
